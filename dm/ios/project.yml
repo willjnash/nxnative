@@ -38,7 +38,11 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationLandscapeRight
           - UIInterfaceOrientationLandscapeLeft
-        UIRequiresFullScreen: true
+        UISupportedInterfaceOrientations~ipad:   # all four, as an iPad app without UIRequiresFullScreen (deprecated in iOS 26, ignored by iPadOS 27) declares them: its window can be resized. front_ios.m's root view controller still asks for landscape, and the picture fits 16:9 into any window
+          - UIInterfaceOrientationLandscapeRight
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
         UIStatusBarHidden: true
         UIViewControllerBasedStatusBarAppearance: false
         LSApplicationCategoryType: ${DM_APP_CATEGORY}   # game profile app_category
