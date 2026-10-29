@@ -113,6 +113,20 @@ static void launcher_done(void) { [g_root startGame]; }
 @end
 UIViewController *front_ios_root(void) { return [DmRootVC new]; }
 
+// TV (an external display: USB-C / HDMI or AirPlay; project.yml's TV scene role). Non-interactive: no touches reach it, and its window never becomes key, so alerts stay on the phone
+static UIWindowScene *g_tv;
+static void tv_log(UIWindowScene *s, const char *what) {
+    UIScreen *sc = s.screen; CGSize p = sc.bounds.size, px = sc.nativeBounds.size;
+    LOG("front end: TV %s: %.0fx%.0f points, %.0fx%.0f pixels, scale %.2f, %ld Hz, overscan compensation %ld", what, p.width, p.height, px.width, px.height, sc.nativeScale,
+        (long)sc.maximumFramesPerSecond, (long)sc.overscanCompensation);
+}
+@interface TVSceneDelegate : UIResponder <UIWindowSceneDelegate>
+@end
+@implementation TVSceneDelegate
+- (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)o { g_tv = (UIWindowScene *)scene; tv_log(g_tv, "connected"); }
+- (void)sceneDidDisconnect:(UIScene *)scene { if (scene != g_tv) return; LOG("front end: TV disconnected"); g_tv = nil; }
+@end
+
 // Thermal state and screen brightness for the power and present rows every 300 frames (hle_nvn.c; its weak defaults return -1 on the Mac). thermalState: 0 nominal, 1 fair, 2 serious, 3 critical.
 // Brightness is read on the main thread at start and on each change; every change of the thermal state and of Low Power Mode (which lowers the CPU clock) is logged with the time since launch
 static _Atomic double g_brightness = -1;

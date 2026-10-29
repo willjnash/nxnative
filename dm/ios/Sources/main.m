@@ -167,11 +167,12 @@ int front_ios_boot_ok(void) { return g_boot_ok; }
 @end
 @implementation App
 - (UISceneConfiguration *)application:(UIApplication *)a configurationForConnectingSceneSession:(UISceneSession *)s options:(UISceneConnectionOptions *)o {
-    return [[UISceneConfiguration alloc] initWithName:@"Default" sessionRole:s.role];
+    BOOL tv = [s.role isEqualToString:UIWindowSceneSessionRoleExternalDisplayNonInteractive];   // a TV: front_ios.m TVSceneDelegate (project.yml names both)
+    return [[UISceneConfiguration alloc] initWithName:tv ? @"TV" : @"Default" sessionRole:s.role];
 }
 @end
 
-// Scene lifecycle: create the window + hand focus events to front_ios.m
+// Scene lifecycle: create the window + hand focus events to front_ios.m. Only this, the app's own scene, sends them: a TV's scene (front_ios.m TVSceneDelegate) comes and goes without the game losing focus
 @interface SceneDelegate : UIResponder <UIWindowSceneDelegate>
 @property (strong, nonatomic) UIWindow *window;
 @end

@@ -50,11 +50,14 @@ targets:
           - ProfileName: ExtendedGamepad
         CADisableMinimumFrameDurationOnPhone: true
         UIApplicationSceneManifest:
-          UIApplicationSupportsMultipleScenes: false
+          UIApplicationSupportsMultipleScenes: false   # one app window; the TV's scene below is a role of its own, not a second window
           UISceneConfigurations:
             UIWindowSceneSessionRoleApplication:
               - UISceneConfigurationName: Default
                 UISceneDelegateClassName: SceneDelegate
+            UIWindowSceneSessionRoleExternalDisplayNonInteractive:   # a TV (USB-C / HDMI or AirPlay): the game's picture goes there and the phone keeps the controls (front_ios.m TVSceneDelegate); without it iOS mirrors the phone
+              - UISceneConfigurationName: TV
+                UISceneDelegateClassName: TVSceneDelegate
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: ${DM_BUNDLE_ID}
       PRODUCT_NAME: DmIOS
