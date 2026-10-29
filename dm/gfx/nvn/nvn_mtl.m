@@ -10374,7 +10374,9 @@ int mtl_link_tick(uint64_t n, double *target, double *lead_ms, int *ticks, doubl
 }
 static _Atomic uint64_t g_drawable_ns;   // Accumulated wall clock waiting for nextDrawable in present (timing instrumentation)
 uint64_t mtl_drawable_ns_take(void) { return atomic_exchange(&g_drawable_ns, 0); }
-// Maximum refresh rate (Hz) of the screen when there is a window; returns 0 without a window. Mac uses CoreGraphics display modes (thread-safe C interface; the present configuration is read on the game thread)
+// Maximum refresh rate (Hz) of the screen when there is a window; returns 0 without a window. Mac uses CoreGraphics display modes (thread-safe C interface; the present configuration is read on the game thread);
+// iOS the screen the game's view is on (front_ios.m: the phone's, or a TV's), else the phone's
+int front_screen_max_fps(void);
 int mtl_display_hz(void) {
     if (!front_metal_layer()) return 0;
 #if TARGET_OS_OSX
@@ -10382,6 +10384,7 @@ int mtl_display_hz(void) {
     double hz = m ? CGDisplayModeGetRefreshRate(m) : 0; if (m) CGDisplayModeRelease(m);
     return (int)(hz + 0.5);
 #else
+    int hz = front_screen_max_fps(); if (hz > 0) return hz;
     Class c = NSClassFromString(@"UIScreen"); id s = c ? [c valueForKey:@"mainScreen"] : nil;
     return s ? [[s valueForKey:@"maximumFramesPerSecond"] intValue] : 0;
 #endif
@@ -10831,8 +10834,9 @@ static int link_on(void) { return g_dm_present_link && !atomic_load(&g_rescue_mo
 // 55 Hz, and a game paced by the link runs at 55 fps (27.5 at 30). There the link runs at the screen's rate and only the refreshes nearest a steady clock of the wanted rate count as
 // ticks (g_link_vperiod, NvMetalDisplayLinkDelegate): 60 a second on average, each frame shown on the refreshes nearest its 1/60 s slot. DM_LINK_VTICK=0 keeps the system's choice.
 // In fullscreen the Mac front end switches such a screen to a rate that is a multiple where it has one (front_screen_match), and the range is set again for it (link_sync)
-__attribute__((weak)) int front_screen_max_fps(void) { return 0; }   // front_mac.m; graphics unit tests and iOS have none
+__attribute__((weak)) int front_screen_max_fps(void) { return 0; }   // front_mac.m, front_ios.m; graphics unit tests have none
 __attribute__((weak)) void front_screen_match(int fps) { (void)fps; }   // front_mac.m; graphics unit tests and iOS have none
+__attribute__((weak)) int front_screen_gen(void) { return 0; }   // front_ios.m; the Mac and graphics unit tests have none: their layer never changes screens under a link
 static CAFrameRateRange link_range(int mode) {
     static int on = -1; if (on < 0) { const char *e = getenv("DM_LINK_VTICK"); on = !(e && !strcmp(e, "0")); }
     int rate = mode == 3 ? 30 : mode == 2 ? 120 : 60, hz = on ? front_screen_max_fps() : 0;
@@ -10870,6 +10874,10 @@ static void *link_main(void *arg) {   // Display link thread: started when switc
     g_link_started = 0;
     return NULL;
 }
+// The link object off the layer: invalidated on its own thread, which then exits (link_main), and the present thread takes the drawables again
+static void link_stop(CAMetalDisplayLink *link) {
+    CFRunLoopRef rl = g_link_rl; g_link = nil; CFRunLoopPerformBlock(rl, kCFRunLoopDefaultMode, ^{ [link invalidate]; pthread_mutex_lock(&g_pq_mu); g_link_owns_layer = 0; pthread_cond_broadcast(&g_pq_cv); pthread_mutex_unlock(&g_pq_mu); CFRunLoopStop(rl); }); CFRunLoopWakeUp(rl);
+}
 static void link_sync(void) {   // Called every frame by the game's present thread: aligns the display link object's state to g_dm_present_link and the power-saving mode (can change at run time)
     static int applied;
     pthread_mutex_lock(&g_pq_mu);
@@ -10882,6 +10890,11 @@ static void link_sync(void) {   // Called every frame by the game's present thre
     if (g_rescue_mode) want = 0;
     pthread_mutex_unlock(&g_pq_mu);
     if (want && mtl_fps_target() == 30) want = 3;   // Power-saving mode: display link at 30 Hz
+#if !TARGET_OS_OSX
+    // A 120 Hz link (mode 2) on a screen that tops out lower (a 60 Hz TV, front_ios.m) fires at the screen's rate, while the waits count ticks of 1/120 s (mtl_link_wait_tick
+    // takes two per vsync): each frame would wait two of the screen's refreshes, 30 fps. Mode 1 there; g_dm_present_link keeps 2, which returns on a 120 Hz screen. The Mac keeps its mode
+    { int hz = front_screen_max_fps(); if (want == 2 && hz > 0 && hz < 120) want = 1; }
+#endif
     if (want) front_screen_match(want == 3 ? 30 : want == 2 ? 120 : 60);
     // The screen's rate changed (switched by front_screen_match, or another screen): the range again, virtual ticks or none. Taken only once the link object exists, so a change
     // while its thread starts (after link_main read the rate) is not lost
@@ -10889,6 +10902,17 @@ static void link_sync(void) {   // Called every frame by the game's present thre
     if (lk && hz != hz_was) { hz_was = hz; if (want && want == applied) { lk.preferredFrameRateRange = link_range(want); MLOG("display link: the screen runs at %d Hz now, range set again (frame %llu)", hz, (unsigned long long)atomic_load(&g_cur_frame)); } }
     int lat = link_latency();   // the window entered or left fullscreen: the latency for it (a link created since took the current one, so a window's link is never set again)
     if (lk && lk.preferredFrameLatency != lat) { lk.preferredFrameLatency = lat; MLOG("display link: frame latency %d (%s; frame %llu)", lat, link_latency_why(), (unsigned long long)atomic_load(&g_cur_frame)); }
+    // The layer moved to another screen (iOS: the phone's ↔ a TV's): the link was made for the screen the layer was on, so it is invalidated as for mode 0, and the frames after
+    // make it again on the new one (link_main), at that screen's rate. Meanwhile the present thread takes the drawables itself (g_link_owns_layer 0)
+    static int gen_was; int gen = front_screen_gen();
+    if (gen != gen_was) {
+        gen_was = gen;
+        if (lk) {
+            link_stop(lk);
+            MLOG("display link: the layer moved to a %d Hz screen, making the link again (mode %d, frame %llu)", hz, want, (unsigned long long)atomic_load(&g_cur_frame));
+            applied = 0; return;
+        }
+    }
     if (want == applied) return;
     g_link_mode = want;
     if (!g_link_started) {
@@ -10899,7 +10923,7 @@ static void link_sync(void) {   // Called every frame by the game's present thre
     }
     CAMetalDisplayLink *link = g_link; if (!link) return;
     if (want) link.preferredFrameRateRange = link_range(want);
-    else { CFRunLoopRef rl = g_link_rl; g_link = nil; CFRunLoopPerformBlock(rl, kCFRunLoopDefaultMode, ^{ [link invalidate]; pthread_mutex_lock(&g_pq_mu); g_link_owns_layer = 0; pthread_cond_broadcast(&g_pq_cv); pthread_mutex_unlock(&g_pq_mu); CFRunLoopStop(rl); }); CFRunLoopWakeUp(rl); }
+    else link_stop(link);
     MLOG("present pacing mode %d → %d (frame %llu)", applied, want, (unsigned long long)atomic_load(&g_cur_frame));
     applied = want;
     pthread_mutex_lock(&g_pq_mu); pthread_cond_broadcast(&g_pq_cv); pthread_mutex_unlock(&g_pq_mu);

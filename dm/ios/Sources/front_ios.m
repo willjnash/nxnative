@@ -18,6 +18,11 @@ const char *front_ios_boot_message(void);   // main.m: why a build that keeps th
 bool dm_show_launcher(void *view_controller, void (*done)(void));   // Launcher.swift: false = no launcher (no dm/launcher.json, or DM_LAUNCHER=0)
 
 static CAMetalLayer *g_layer;
+// The screen the game's view is on (the phone's or a TV's, DmGameView didMoveToWindow): its highest refresh rate, and a count of moves, which link_sync (nvn_mtl.m) reads on the
+// present thread to make the display link again on the new screen
+static _Atomic int g_screen_fps, g_screen_gen;
+int front_screen_max_fps(void) { return g_screen_fps; }
+int front_screen_gen(void) { return g_screen_gen; }
 static void front_ios_power_watch(void);
 static void front_ios_audio_watch(void);
 static UILabel *front_ios_fps_label(void);
@@ -48,6 +53,8 @@ static void front_ios_place(void);
     [super didMoveToWindow];
     UIScreen *sc = self.window.windowScene.screen; if (!sc) return;
     ((CAMetalLayer *)self.layer).contentsScale = sc.nativeScale;
+    g_screen_fps = (int)sc.maximumFramesPerSecond; g_screen_gen++;
+    LOG("front end: the game's view is on a %d Hz screen, scale %.2f", g_screen_fps, sc.nativeScale);
     [self setNeedsLayout];
 }
 @end
