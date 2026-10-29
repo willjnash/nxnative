@@ -167,7 +167,7 @@ int front_ios_boot_ok(void) { return g_boot_ok; }
 @end
 @implementation App
 - (UISceneConfiguration *)application:(UIApplication *)a configurationForConnectingSceneSession:(UISceneSession *)s options:(UISceneConnectionOptions *)o {
-    BOOL tv = [s.role isEqualToString:UIWindowSceneSessionRoleExternalDisplayNonInteractive];   // a TV: front_ios.m TVSceneDelegate (project.yml names both)
+    BOOL tv = [s.role isEqualToString:UIWindowSceneSessionRoleExternalDisplayNonInteractive];   // a TV on iOS 26: front_ios.m TVSceneDelegate (project.yml names both); iOS 27 offers it only to front_ios_tv_offer's accessory
     return [[UISceneConfiguration alloc] initWithName:tv ? @"TV" : @"Default" sessionRole:s.role];
 }
 @end

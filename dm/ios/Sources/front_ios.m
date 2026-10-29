@@ -27,6 +27,7 @@ static void front_ios_power_watch(void);
 static void front_ios_audio_watch(void);
 static UILabel *front_ios_fps_label(void);
 static void front_ios_place(void);
+static void front_ios_tv_offer(UIViewController *vc);
 
 @interface DmGameView : UIView
 @end
@@ -109,7 +110,8 @@ static void launcher_done(void) { [g_root startGame]; }
     if (self.fps) [self.view addSubview:self.fps];
     [self.view setNeedsLayout]; [self.view layoutIfNeeded];
     UIApplication.sharedApplication.idleTimerDisabled = YES;
-    front_ios_place();   // a TV that connected during the launcher, or before the app started, takes the picture now
+    front_ios_place();   // iOS 26: a TV that connected during the launcher, or before the app started, takes the picture now
+    front_ios_tv_offer(self);   // iOS 27: a TV's scene connects only from here on
     front_ios_boot();
 }
 - (void)viewDidLayoutSubviews {
@@ -141,7 +143,8 @@ static void launcher_done(void) { [g_root startGame]; }
 @end
 UIViewController *front_ios_root(void) { return [DmRootVC new]; }
 
-// TV (an external display: USB-C / HDMI or AirPlay; project.yml's TV scene role). Non-interactive: no touches reach it, and its window never becomes key, so alerts stay on the phone
+// TV (an external display: USB-C / HDMI or AirPlay; project.yml's TV scene role). Non-interactive: no touches reach it, and its window never becomes key, so alerts stay on the phone.
+// iOS 26 connects the TV's scene by itself (main.m's App names TVSceneDelegate for its role); iOS 27 only for a scene accessory a view controller registered (front_ios_tv_offer)
 static UIWindowScene *g_tv; static UIWindow *g_tv_win;
 @interface DmTVVC : UIViewController   // black, the game's view fitted 16:9 at the TV's own resolution (overscan: the system's compensation, UIScreen.overscanCompensation)
 @end
@@ -150,7 +153,7 @@ static UIWindowScene *g_tv; static UIWindow *g_tv_win;
 - (void)viewDidLayoutSubviews { [super viewDidLayoutSubviews]; for (UIView *v in self.view.subviews) v.frame = fit169(self.view.bounds); }
 @end
 // The game's view on the TV while one is connected, else on the phone; the pad, the frame-rate counter and the progress screen stay on the phone. Main thread.
-// Until the view exists (the launcher; no game files) the TV's scene has no window and iOS mirrors the phone. The game keeps running through the move: the layer is the same
+// Until the view exists (the launcher; no game files) the TV's scene has no window (iOS 26) or is not offered yet (iOS 27), and iOS mirrors the phone. The game keeps running through the move: the layer is the same
 // (front_metal_layer, its residency set), Core Animation takes the move while the present thread takes drawables, and the display link is made again for the new screen
 // (front_screen_gen). Not dm_gfx_suspend: it waits for the graphics calls in progress, and the prepare step builds its pipelines inside one, minutes on the main thread
 static void front_ios_place(void) {
@@ -175,6 +178,17 @@ static void tv_log(UIWindowScene *s, const char *what) {
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)o { g_tv = (UIWindowScene *)scene; tv_log(g_tv, "connected"); front_ios_place(); }
 - (void)sceneDidDisconnect:(UIScene *)scene { if (scene != g_tv) return; LOG("front end: TV disconnected"); g_tv = nil; front_ios_place(); }
 @end
+// iOS 27 connects a TV's scene only while a view controller that registered a scene accessory for it is shown, and disconnects it when that one goes; without one the TV mirrors
+// the phone (iOS 26 offered the scene to every app, and the game's picture never reached a TV on iOS 27). Registered on the root view controller once the game's view exists
+// (startGame), so the launcher stays mirrored as on iOS 26. The configuration names the delegate itself: the scene's role is iOS's to set
+static void front_ios_tv_offer(UIViewController *vc) {
+    if (@available(iOS 27.0, *)) {
+        static UISceneAccessoryRegistration *reg; if (reg) return;
+        UISceneConfiguration *c = [UISceneConfiguration new]; c.delegateClass = TVSceneDelegate.class;
+        reg = [vc registerSceneAccessory:[UISceneAccessory externalNonInteractiveSceneAccessoryWithConfiguration:c]];
+        LOG("front end: TV scene offered (iOS 27 scene accessory; %s)", reg.available ? "a TV is available" : "no TV available yet");
+    }
+}
 
 // Thermal state and screen brightness for the power and present rows every 300 frames (hle_nvn.c; its weak defaults return -1 on the Mac). thermalState: 0 nominal, 1 fair, 2 serious, 3 critical.
 // Brightness is read on the main thread at start and on each change; every change of the thermal state and of Low Power Mode (which lowers the CPU clock) is logged with the time since launch

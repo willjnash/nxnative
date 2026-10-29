@@ -55,7 +55,7 @@ targets:
             UIWindowSceneSessionRoleApplication:
               - UISceneConfigurationName: Default
                 UISceneDelegateClassName: SceneDelegate
-            UIWindowSceneSessionRoleExternalDisplayNonInteractive:   # a TV (USB-C / HDMI or AirPlay): the game's picture goes there and the phone keeps the controls (front_ios.m TVSceneDelegate); without it iOS mirrors the phone
+            UIWindowSceneSessionRoleExternalDisplayNonInteractive:   # a TV (USB-C / HDMI or AirPlay): the game's picture goes there and the phone keeps the controls (front_ios.m TVSceneDelegate). iOS 26 connects it through this; iOS 27 only through front_ios_tv_offer's scene accessory
               - UISceneConfigurationName: TV
                 UISceneDelegateClassName: TVSceneDelegate
     settings:

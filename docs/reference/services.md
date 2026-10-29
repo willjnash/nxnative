@@ -472,6 +472,14 @@ Most service calls can be found before they crash, before the first boot or the 
 - **Fix:** with no album they fail: `album::Initialize` (saving to the album now fails, `hle_offline.c`); SDK 7's `album::SaveScreenshot` without an orientation (fails); SDK 20's `SaveAndShareScreenshot` with a share ID and `GetSharePostedLastUrl`; `album::SaveCurrentScreenshot`.
 - **Found on:** [Monster Hunter Rise](../../dm/games/0100B04011742000/README.md) (SDK 11: `album::Initialize`); [DRAGON QUEST XI S](../../dm/games/01006C300E9F0000/README.md) (SDK 7.3.2: `album::SaveScreenshot`); [Animal Crossing: New Horizons](../../dm/games/01006F8002326000/README.md) (SDK 20.5.4: the sharing calls); [Pokémon Legends: Z-A](../../dm/games/0100F43008C44000/README.md) (19.3.11: `SaveCurrentScreenshot`).
 
+### A TV kept mirroring the phone on iOS 27
+
+- **Symptom:** with a TV on a USB-C to HDMI adapter, the TV kept mirroring the phone after the game started, touch controls included, and the game's picture stayed on the phone (iPhone, iOS 27.2). The log had no `front end: TV connected` line.
+- **Cause:** from iOS 27, iOS connects an external display's scene (`UIWindowSceneSessionRoleExternalDisplayNonInteractive`) only while a view controller that registered a scene accessory for it is shown (`UISceneAccessory`, `registerSceneAccessory:`). iOS 26 offered the scene to every app that declared the role. The front end had only that iOS 26 path: the TV configuration in the scene manifest (`dm/ios/project.yml`) and the role check in `main.m`'s app delegate.
+- **Fix:** `front_ios_tv_offer` in `front_ios.m` registers the accessory, with `TVSceneDelegate` as its delegate, on the root view controller when the game starts. The iOS 26 path stays, since the deployment target is iOS 26. The launcher stays mirrored on both.
+- **Found on:** [The Legend of Zelda: Breath of the Wild](../../dm/games/01007EF00011E000/README.md) (iPhone: the first test on a TV).
+- **Check:** on an iPhone 18 Pro (iOS 27.2) with a 1080p TV on USB-C / HDMI, the TV showed only the game. The log had `front end: TV scene offered` when the game started, then `front end: TV connected: 1920x1080 points, … 60 Hz` and `the game's picture is on the TV now`; the display link was made again for the TV's 60 Hz. While the app is in the background iOS disconnects the scene and the picture goes back to the phone; it returns to the TV when the app is active again (three times in that run).
+
 ## Accounts, network, shop and parental controls
 
 ### Account, friends, play data and Nintendo Account calls
