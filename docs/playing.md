@@ -28,6 +28,14 @@ Switch Pro Controller gyro on the Mac still needs the HID support being develope
 
 **Shaking.** Shake the iPhone to shake the controller, in games that read its motion: Super Mario Odyssey's motion moves (such as the cap throw on a shake) need it, and Odyssey only takes them in its default docked mode. A light bump does not count; a sharp flick of the phone does.
 
+## Playing on a TV
+
+Connect a TV through a USB-C to HDMI adapter, or pick an Apple TV or AirPlay TV under Screen Mirroring. The TV mirrors the phone until the game starts. From then on the TV shows only the game, full screen in 16:9 at the TV's own resolution. The phone becomes the controller: the touch controls stay on it, with "Playing on TV" where the picture was, and a connected controller works as usual. Disconnect the TV and the picture comes back to the phone. The game keeps running through both moves.
+
+- Most TVs run at 60 Hz, so a 120 fps setting plays at 60 on the TV and goes back to 120 on the phone.
+- Connecting a TV does not switch the game to docked mode. For the sharper picture on a TV, choose Docked under **Console mode** on the settings screen.
+- AirPlay adds a noticeable delay between a button press and the picture. A cable is better for action games.
+
 ## Game language
 
 English by default. Pick another when packing with `--language` (`-l`), by code or by name: `-l ja`, `-l zh-Hans`, `-l French` (`LANGUAGE` in Spyder). It must be one the game has; the script prints the game's languages and stops on one it lacks. To change it without rebuilding, pick another on the settings screen.
